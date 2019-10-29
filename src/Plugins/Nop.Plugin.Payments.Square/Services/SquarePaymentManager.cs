@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Newtonsoft.Json;
 using Nop.Core;
 using Nop.Plugin.Payments.Square.Domain;
+using Nop.Services.Configuration;
 using Nop.Services.Logging;
 using Square.Connect.Api;
 using Square.Connect.Client;
@@ -22,7 +23,8 @@ namespace Nop.Plugin.Payments.Square.Services
         private readonly ILogger _logger;
         private readonly IWorkContext _workContext;
         private readonly SquareAuthorizationHttpClient _squareAuthorizationHttpClient;
-        private readonly SquarePaymentSettings _squarePaymentSettings;
+        private readonly ISettingService _settingService;
+        private readonly IStoreContext _storeContext;
 
         #endregion
 
@@ -31,12 +33,14 @@ namespace Nop.Plugin.Payments.Square.Services
         public SquarePaymentManager(ILogger logger,
             IWorkContext workContext,
             SquareAuthorizationHttpClient squareAuthorizationHttpClient,
-            SquarePaymentSettings squarePaymentSettings)
+            ISettingService settingService,
+            IStoreContext storeContext)
         {
             _logger = logger;
             _workContext = workContext;
             _squareAuthorizationHttpClient = squareAuthorizationHttpClient;
-            _squarePaymentSettings = squarePaymentSettings;
+            _settingService = settingService;
+            _storeContext = storeContext;
         }
 
         #endregion
@@ -49,16 +53,20 @@ namespace Nop.Plugin.Payments.Square.Services
         /// <returns>The API Configuration</returns>
         private Configuration CreateApiConfiguration()
         {
+            //load settings for a chosen store scope
+            var storeId = _storeContext.ActiveStoreScopeConfiguration;
+            var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
             //validate access token
-            if (_squarePaymentSettings.UseSandbox && string.IsNullOrEmpty(_squarePaymentSettings.AccessToken))
+            if (settings.UseSandbox && string.IsNullOrEmpty(settings.AccessToken))
                 throw new NopException("Sandbox access token should not be empty");
 
             var config = new Configuration
             {
-                AccessToken = _squarePaymentSettings.AccessToken,
+                AccessToken = settings.AccessToken,
                 UserAgent = SquarePaymentDefaults.UserAgent
             };
-            if (_squarePaymentSettings.UseSandbox)
+            if (settings.UseSandbox)
                 config.setApiClientUsingDefault(new ApiClient(SquarePaymentDefaults.SandboxBaseUrl));
 
             return config;
@@ -237,8 +245,12 @@ namespace Nop.Plugin.Payments.Square.Services
         {
             try
             {
+                //load settings for a chosen store scope
+                var storeId = _storeContext.ActiveStoreScopeConfiguration;
+                var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
                 //try to get the selected location
-                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(_squarePaymentSettings.LocationId));
+                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(settings.LocationId));
                 if (selectedLocation == null)
                     throw new NopException("Location is a required parameter for payment requests");
 
@@ -287,8 +299,12 @@ namespace Nop.Plugin.Payments.Square.Services
         {
             try
             {
+                //load settings for a chosen store scope
+                var storeId = _storeContext.ActiveStoreScopeConfiguration;
+                var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
                 //try to get the selected location
-                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(_squarePaymentSettings.LocationId));
+                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(settings.LocationId));
                 if (selectedLocation == null)
                     throw new NopException("Location is a required parameter for payment requests");
 
@@ -337,8 +353,12 @@ namespace Nop.Plugin.Payments.Square.Services
         {
             try
             {
+                //load settings for a chosen store scope
+                var storeId = _storeContext.ActiveStoreScopeConfiguration;
+                var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
                 //try to get the selected location
-                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(_squarePaymentSettings.LocationId));
+                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(settings.LocationId));
                 if (selectedLocation == null)
                     throw new NopException("Location is a required parameter for payment requests");
 
@@ -388,8 +408,12 @@ namespace Nop.Plugin.Payments.Square.Services
         {
             try
             {
+                //load settings for a chosen store scope
+                var storeId = _storeContext.ActiveStoreScopeConfiguration;
+                var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
                 //try to get the selected location
-                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(_squarePaymentSettings.LocationId));
+                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(settings.LocationId));
                 if (selectedLocation == null)
                     throw new NopException("Location is a required parameter for payment requests");
 
@@ -440,8 +464,12 @@ namespace Nop.Plugin.Payments.Square.Services
         {
             try
             {
+                //load settings for a chosen store scope
+                var storeId = _storeContext.ActiveStoreScopeConfiguration;
+                var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
                 //try to get the selected location
-                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(_squarePaymentSettings.LocationId));
+                var selectedLocation = GetActiveLocations().FirstOrDefault(location => location.Id.Equals(settings.LocationId));
                 if (selectedLocation == null)
                     throw new NopException("Location is a required parameter for payment requests");
 
@@ -545,11 +573,15 @@ namespace Nop.Plugin.Payments.Square.Services
             //request all of the permissions
             var requestingPermissions = string.Join(" ", permissionScopes);
 
+            //load settings for a chosen store scope
+            var storeId = _storeContext.ActiveStoreScopeConfiguration;
+            var settings = _settingService.LoadSetting<SquarePaymentSettings>(storeId);
+
             //create query parameters for the request
             var queryParameters = new Dictionary<string, string>
             {
                 //The application ID.
-                ["client_id"] = _squarePaymentSettings.ApplicationId,
+                ["client_id"] = settings.ApplicationId,
 
                 //Indicates whether you want to receive an authorization code ("code") or an access token ("token").
                 ["response_type"] = "code",
@@ -564,7 +596,7 @@ namespace Nop.Plugin.Payments.Square.Services
                 ["session"] = "false",
 
                 //Include this parameter and verify its value to help protect against cross-site request forgery.
-                ["state"] = _squarePaymentSettings.AccessTokenVerificationString,
+                ["state"] = settings.AccessTokenVerificationString,
 
                 //The ID of the subscription plan to direct the merchant to sign up for, if any.
                 //You can provide this parameter with no value to give a merchant the option to cancel an active subscription.
